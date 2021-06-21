@@ -35,50 +35,6 @@ def mapScaffsToChroms(scaffs2ChromFile):
     f.close()
     return(Chrom2Scaffs, Scaffs2Chrom, scaffOrientation, scaffsInChroms)
 
-def getGeneBoundaries(geneBoundariesFile):
-    geneBoundaries = {}
-    f = open(geneBoundariesFile, 'r')
-    for line in f:
-        if not line.startswith("GeneName"):
-            line = line.strip()
-            info = line.split()
-            geneName = info[0]
-            geneNameEns = info[1]
-            scaff = info[2]
-            start = info[3]
-            end = info[4]
-            if scaff in geneBoundaries:
-                geneBoundaries[scaff].append( (int(start), int(end), geneName, geneNameEns) )
-            else:
-                geneBoundaries[scaff]= []
-                geneBoundaries[scaff].append( (int(start), int(end), geneName, geneNameEns) )
-                    
-    f.close()
-    return(geneBoundaries)
-
-def getSFStestsData(SFStests_file, scaffsAll, Chrom2Scaffs):
-
-    fayWuHDict = defaultdict(list)
-    TajDDict = defaultdict(list)
-
-    fh = open(SFStests_file, 'r')
-    for line in fh:
-        if "window" not in line: 
-            line = line.strip()
-            line = line.split()
-            scaff = line[0]
-            winStart = int(line[2])-1
-            winEnd = int(line[3])-1
-
-            H = float(line[5])
-            D = float(line[6])
-
-            fayWuHDict[scaff].append( (winStart, winEnd, H) )
-            TajDDict[scaff].append( (winStart, winEnd, D) )
-
-    fh.close()
-    return(fayWuHDict, TajDDict)
-
 
 def getFstDataFromAngsd(fst_dir, scaffsAll, Chrom2Scaffs):
     fstDict = defaultdict(list)
@@ -187,30 +143,6 @@ def getHweData(HWE_file, minSegSites):
 
     return(hetDict, hetObs)	
 
-def getGene(scaff, winStart, winEnd, geneBoundaries):
-    #geneBoundaries[scaff][geneName] = [ (int(start), int(end), geneName) ]
-    geneName = "NA"
-    geneNameEns = "NA"
-    maxOverlap = 0
-    maxOverlap_index = "NA"
-    # some scaffolds, e.g. smaller ones, may not have genes!
-    if scaff in geneBoundaries:
-        for i in range(len(geneBoundaries[scaff])):
-            overlap_bp = overlaps( (winStart,winEnd), (geneBoundaries[scaff][i][0],geneBoundaries[scaff][i][1]) )
-            if overlap_bp > maxOverlap:
-                maxOverlap_index = i
-    if maxOverlap_index != "NA":
-        geneName = geneBoundaries[scaff][maxOverlap_index][2]
-        geneNameEns = geneBoundaries[scaff][maxOverlap_index][3]
-    return(geneName, geneNameEns)
-
-def reverseSorting(scaffOrientation, scaff):
-    reverseTrueFalse = False
-    if scaff in scaffOrientation:	
-        if scaffOrientation[scaff] == "-":
-            reverseTrueFalse = True
-    return(reverseTrueFalse)
-
 def makeArray(Dict, Obs):
     arr = np.empty(Obs)
     index = -1
@@ -234,9 +166,10 @@ def printOutlierList(name_prefix, Dict, cutoff, Scaffs2Chrom, percentileCutoff, 
                 print(scaff, win[0], win[1], win[2], sep="\t", end="\n", file=out_outlier)
     out_outlier.close()
     out_all.close()
+
 def main():
 
-    percentileCutoff = float(sys.argv[1])
+    percentileCutoff = float(sys.argv[1]) # for genomic summary statistics, specify a quantile for a significance threshold, e.g. 0.95 as used in the paper
     minSegSites = 29
     outlier_dir = "outliers"
     if not os.path.isdir(outlier_dir):
@@ -244,34 +177,22 @@ def main():
 
     ###########################################################################
     # DIRECTORIES AND FILES 
+    # locations of genomic analyses or other relevant files
     ###########################################################################
     scaffs2ChromFile = "/tigress/bjarnold/AfricanElephants/genome/loxAfr4/ScaffoldsInChromosomes.txt"
-    #geneBoundariesFile = "/n/holylfs/LABS/informatics/bjarnold/AfricanElephants/scripts/new/VCFanalyses/NewAnalysesWithOGs/position_2_gene.txt"
 
-    # RAiSD dir
+    # RAiSD dir, one file per scaffold
     RAiSD_dir = "/scratch/gpfs/bjarnold/AE/workflows/RAiSD/analysis"
-    #RAiSD_dir = "/n/holylfs/LABS/informatics/bjarnold/AfricanElephants/scripts/new/VCFanalyses/NewAnalysesWithOGs/RAiSD/tusklessMZ/w50_c1"
 
-    # FST FILES
+    # FST FILES, one file per scaffold
     fst_dir = "/scratch/gpfs/bjarnold/AE/workflows/angsd/fst"
 
-    # DXY FILES
+    # DXY FILES, one file per scaffold
     dxy_dir = "/scratch/gpfs/bjarnold/AE/workflows/angsd/dxy"
 
-    ###
     # HET analyses
-    ###
-    # All tuskless alleles
-    #HWE_file = "/scratch/gpfs/bjarnold/AE/workflows/HWE/HWEdeviations_Tuskless_25SNPwin_5stepSize_minAF0.15_maxAF0.85.txt"
-    #HWE_file = "/scratch/gpfs/bjarnold/AE/workflows/HWE/HWEdeviations_Tuskless_50SNPwin_10stepSize_minAF0.1_maxAF0.9.txt"
-    #HWE_file = "/scratch/gpfs/bjarnold/AE/workflows/HWE/HWEdeviations_Tuskless_50SNPwin_10stepSize_minAF0.0_maxAF1.0.txt"
-
-
-    # Private tuskless alleles (i.e. not present in tusked samples)
-    #HWE_file = "/tigress/bjarnold/AfricanElephants/data/HWE/TusklessPrivateAlleles/HWEdeviations_TusklessPrivateAlleles_50SNPwin_10stepSize_minAF0.1_maxAF0.9.txt"
+    # Private tuskless alleles (i.e. not present in tusked samples), single file with all scaffolds
     HWE_file = "/tigress/bjarnold/AfricanElephants/data/HWE/TusklessPrivateAlleles/HWEdeviations_TusklessPrivateAlleles_10SNPwin_2stepSize_minAF0.15_maxAF0.85.txt"
-    #HWE_file = "/tigress/bjarnold/AfricanElephants/data/HWE/TusklessPrivateAlleles/HWEdeviations_TusklessPrivateAlleles_10SNPwin_2stepSize_minAF0.1_maxAF0.9.txt"
-    #HWE_file = "/tigress/bjarnold/AfricanElephants/data/HWE/TusklessPrivateAlleles/HWEdeviations_TusklessPrivateAlleles_10SNPwin_2stepSize_minAF0.0_maxAF1.0.txt"
 
     ###########################################################################
     # GET INFO ABOUT GENES, SCAFFOLDS, CHROMOSOMES 
@@ -297,10 +218,6 @@ def main():
         if scaff not in scaffsInChroms:
             Chrom2Scaffs["Strays"].append(scaff)
 
-    # FIND GENE BOUNDARIES
-    # geneBoundaries[scaff] = [ (int(start), int(end), geneNae) ]
-    #geneBoundaries = getGeneBoundaries(geneBoundariesFile)
-
     ###########################################################################
     # LOAD RESULTS FOR OVERLAPPING
     ###########################################################################
@@ -317,8 +234,6 @@ def main():
     # hetDict[scaff] = ( (winStart, winEnd, hetDevTuskless) ) 
     hetDict, hetObs = getHweData(HWE_file, minSegSites)
 
-    #fayWuHDict, TajDDict = getSFStestsData(SFStests_file, scaffsAll, Chrom2Scaffs)	
-
     muvar_arr = makeArray(muVarDict, raisdObs)
     musfs_arr = makeArray(muSfsDict, raisdObs)
     muld_arr = makeArray(muLdDict, raisdObs)
@@ -333,6 +248,7 @@ def main():
     print(np.percentile(dxy_arr, percentileCutoff))
     print(np.percentile(het_arr, percentileCutoff))
 
+    # Compute cutoffs for each genomic statistic, based on the genome-wide distribution
     muVar_cutoff = np.percentile(muvar_arr, percentileCutoff)
     muSfs_cutoff = np.percentile(musfs_arr, percentileCutoff)
     muLd_cutoff = np.percentile(muld_arr, percentileCutoff)
@@ -341,6 +257,7 @@ def main():
     dxy_cutoff = np.percentile(dxy_arr, percentileCutoff)
     het_cutoff = np.percentile(het_arr, percentileCutoff)
 
+    # Print results
     printOutlierList("RAiSD_muComb", muCombDict, muComb_cutoff, Scaffs2Chrom, percentileCutoff, outlier_dir)
     printOutlierList("RAiSD_muVar", muVarDict, muVar_cutoff, Scaffs2Chrom, percentileCutoff, outlier_dir)
     printOutlierList("RAiSD_muSfs", muSfsDict, muSfs_cutoff, Scaffs2Chrom, percentileCutoff, outlier_dir)

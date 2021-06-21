@@ -30,44 +30,43 @@ def main():
 
     for scaffold in scaffs:
         f = scaffold + ".fst10kbwin2kbslide.txt"
-        if scaffold != "scaffold_17":
-            if not os.path.isfile(f):
-                # exanple taken from http://www.popgen.dk/angsd/index.php/Fst
-                command = ""
-                command = command + f"{angsd_dir}/angsd -bam {bamListTuskless} "
-                command = command + f"-anc {ref} "
-                command = command + f"-doSaf 1 "
-                command = command + f"-GL 1 "
-                command = command + f"-r {scaffold} "
-                command = command + f"-out {scaffold}_tuskless\n"
+        if not os.path.isfile(f):
+            # exanple taken from http://www.popgen.dk/angsd/index.php/Fst
+            command = ""
+            command = command + f"{angsd_dir}/angsd -bam {bamListTuskless} "
+            command = command + f"-anc {ref} "
+            command = command + f"-doSaf 1 "
+            command = command + f"-GL 1 "
+            command = command + f"-r {scaffold} "
+            command = command + f"-out {scaffold}_tuskless\n"
 
-                command = command + f"{angsd_dir}/angsd -bam {bamListTusked} "
-                command = command + f"-anc {ref} "
-                command = command + f"-doSaf 1 "
-                command = command + f"-GL 1 "
-                command = command + f"-r {scaffold} "
-                command = command + f"-out {scaffold}_tusked\n"
+            command = command + f"{angsd_dir}/angsd -bam {bamListTusked} "
+            command = command + f"-anc {ref} "
+            command = command + f"-doSaf 1 "
+            command = command + f"-GL 1 "
+            command = command + f"-r {scaffold} "
+            command = command + f"-out {scaffold}_tusked\n"
 
-                command = command + f"{angsd_dir}/misc/realSFS " 
-                command = command + f"{scaffold}_tuskless.saf.idx "
-                command = command + f"{scaffold}_tusked.saf.idx "
-                command = command + f"> {scaffold}tuskless.tusked.ml\n"
+            command = command + f"{angsd_dir}/misc/realSFS " 
+            command = command + f"{scaffold}_tuskless.saf.idx "
+            command = command + f"{scaffold}_tusked.saf.idx "
+            command = command + f"> {scaffold}tuskless.tusked.ml\n"
 
-                command = command + f"{angsd_dir}/misc/realSFS fst index "
-                command = command + f"{scaffold}_tuskless.saf.idx " 
-                command = command + f"{scaffold}_tusked.saf.idx " 
-                command = command + f"-r {scaffold} " 
-                command = command + f"-sfs {scaffold}tuskless.tusked.ml " 
-                command = command + f"-fstout {scaffold}\n"
+            command = command + f"{angsd_dir}/misc/realSFS fst index "
+            command = command + f"{scaffold}_tuskless.saf.idx " 
+            command = command + f"{scaffold}_tusked.saf.idx " 
+            command = command + f"-r {scaffold} " 
+            command = command + f"-sfs {scaffold}tuskless.tusked.ml " 
+            command = command + f"-fstout {scaffold}\n"
 
-                command = command + f"{angsd_dir}/misc/realSFS fst stats2 "
-                command = command + f"{scaffold}.fst.idx " 
-                command = command + f"-win 10000 " 
-                command = command + f"-step 2000 " 
-                command = command + f"> {scaffold}.fst10kbwin2kbslide.txt\n" 
+            command = command + f"{angsd_dir}/misc/realSFS fst stats2 "
+            command = command + f"{scaffold}.fst.idx " 
+            command = command + f"-win 10000 " 
+            command = command + f"-step 2000 " 
+            command = command + f"> {scaffold}.fst10kbwin2kbslide.txt\n" 
 
-                print(scaffold)
-                shFn.create_job_script(scaffold, outDir, tasks, cpuPerTask, time, mem, command) 
+            print(scaffold)
+            shFn.create_job_script(scaffold, outDir, tasks, cpuPerTask, time, mem, command) 
 
 if __name__ == '__main__':
   main()

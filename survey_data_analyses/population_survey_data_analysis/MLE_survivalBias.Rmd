@@ -1,0 +1,201 @@
+---
+title: "Maximum likelihood estimation (MLE) of tuskless elephant survival bias"
+output: html_document
+---
+library(BiasedUrn)
+### Raw Data
+
+total pre-war popuation size:      2542  
+total post-war population size:    242  
+female tuskless proportion before: 0.185  
+female tuskless proportion after:  0.509
+
+These population size estimates are for the entirety of Gorongosa, but tusk status was only studied
+in females since they are the only sex that are polymorphic for the presence of tusks. We thus focus on the number of female elephants before and after the war to quantify the survival bias of tuskless females compared to tusked females. 
+
+While we do not know precisely how many of these elephants before and after the war are females, a 50:50 sex ratio is likely a sensible lower bound because (1) humans may preferentially target males because of their
+larger tusks and (2) if tusklessness is a male-lethal trait, this will skew the population slightly towards females.
+
+```{r, echo=FALSE }
+sexRatio <- 0.5
+
+Npre <- 2542*sexRatio # total population size of females before war
+Npost <- 242*sexRatio # total population size of females after war
+PropTuskless_pre <- 0.185 # fraction of tuskless females before war
+PropTuskless_post <- 0.509 # fraction of tuskless females after war
+
+Npre_tuskless <- Npre*PropTuskless_pre # number of tuskless females before the war
+Npre_tusked <- Npre*(1-PropTuskless_pre) # number of tusked females before the war
+Npost_tuskless <- Npost*PropTuskless_post # number of tuskless females after the war
+Npost_tusked <- Npost*(1-PropTuskless_post) # number of tusked females after the war
+```
+
+
+### Computing the MLE
+
+To model the survival bias of tuskless female elephants, we use the Wallenius distribution that is featured in the BiasedUrn package ("dWNCHypergeo" function). This distribution models the subsampling of a population containing two distinct types.
+
+```{r, echo=FALSE }
+library(scales)
+library(BiasedUrn)
+```
+
+This is the null distribution of how many tuskless females we would expect after the war if there were no difference in survival between tuskless and tusked females.
+
+```{r, echo=FALSE }
+x <- rWNCHypergeo(nran=10000000,
+               m1=Npre_tuskless,
+               m2=Npre_tusked,
+               n=(Npost_tuskless+Npost_tusked),
+               odds=1) # diff odds ratios input here
+hist(x/(Npost_tuskless+Npost_tusked),
+     freq=F,
+     breaks=20,
+     main="",
+     xlab="Proportion of Tuskless Females",
+     xlim=c(0,0.6),
+     col=alpha("#2c7fb8", 0.8))
+abline(v=quantile(x/(Npost_tuskless+Npost_tusked), probs=0.99), lty=3)
+abline(v=PropTuskless_post)
+abline(v=0.3614458)
+
+```
+
+From the documentation:
+```
+dWNCHypergeo(x, m1, m2, n, odds, precision=1E-7)
+x: number red balls sampled
+m1: initial number of red balls
+m2: initial number of white balls
+n: total number of balls sampled
+odds: probability ratio of red over white balls
+```
+
+
+
+Here we treat red balls as tuskless females and white balls as tusked females. Using the data above, we have estimates for all parameters except 'odds'. We will use this dWNCHypergeo functions to find the value of 'odds' that maximizes the likelihood of our data before and after the war by computing the likelihood for a series of 'odds' values ranging from no bias (odds=1) to extreme bias (odds=10). We assume the true bias lies somewhere within this interval, and how densely we sample points within this range will affect the accuracy of our MLE estimates and confidence intervals (CIs).
+```{r, echo=FALSE }
+odds_range <- seq(from=1, to=10, by=0.001)
+```
+
+
+We will calculate the likelihood for each one of these 'odds' values and store them in a vector.
+```{r, echo=FALSE }
+likelihoods <- c()
+for(i in 1:length(odds_range)){
+  tmp <- dWNCHypergeo(x=Npost_tuskless,
+               m1=Npre_tuskless,
+               m2=Npre_tusked,
+               n=(Npost_tuskless+Npost_tusked),
+               odds=odds_range[i]) # diff odds ratios input here
+  likelihoods <- c(likelihoods, tmp) # store likelihoods as we go
+}
+# the maximum likelihood value
+max(likelihoods)
+# the parameter 'odds' value that corresponds to this maximum likelihood value (MLE of 'odds')
+odds_range[ likelihoods == max(likelihoods) ] 
+```
+
+A plot of these likelihoods:  
+```{r, echo=FALSE }
+library(scales)
+plot(y=likelihoods, x=odds_range,
+     type="l",
+     lwd=3,
+     axes=F,
+     xlab="",
+     ylab="",
+     xlim=c(2,10),
+     main="likelihood")
+axis(side=1, at=c(2:10), labels=T)
+axis(side=2, at=seq(from=0, to=0.06, by=0.01))
+mtext(side=1, text="tuskless survival bias", line=2)
+mtext(side=2, text="likelihood", line=2)
+abline(v= odds_range[ likelihoods == max(likelihoods) ], lty=2, col=alpha("black", 0.5) )
+```
+
+
+We will repeat the above process except use log likelihoods, which we may use to compute CIs since a drop in 1.92 log likelihoods from the maximum value corresponds to the 95% CI.
+```{r, echo=FALSE }
+loglikelihoods <- c()
+for(i in 1:length(odds_range)){
+  tmp <- dWNCHypergeo(x=Npost_tuskless,
+                      m1=Npre_tuskless,
+                      m2=Npre_tusked,
+                      n=(Npost_tuskless+Npost_tusked),
+                      odds=odds_range[i])
+  tmp <- log(tmp)
+  loglikelihoods <- c(loglikelihoods, tmp)
+}
+
+# The MLE of 'odds', should be exact same as above
+MLE <- odds_range[ loglikelihoods == max(loglikelihoods) ] 
+# To compute 95% CIs, get all 'odds' that are within 1.92 log likelihood units from the MLE. Note: the following vector just contains indices
+idx_mleCI <- which( loglikelihoods >= (max(loglikelihoods) - 1.92)  )
+# Use the minimum and maximum value of this vector of indices to get the endpoints of the CI, or the 95% CI.
+CI <- odds_range[ c(min(idx_mleCI), max(idx_mleCI)) ]
+```
+
+A plot of these log likelihoods and the 95% CI of our MLE:  
+```{r, echo=TRUE }
+dev.new(height=5, width=5, noRStudioGD=T)
+plot(y=(loglikelihoods), x=odds_range,
+     lwd=3,
+     type="l",
+     axes=F,
+     xlab="",
+     ylab="",
+     xlim=c(3,8),
+     ylim=c(-8,-2),
+     col=alpha("#2c7fb8", 0.8))
+axis(side=1, labels=T, at=c(1:10))
+axis(side=2, labels=T)
+mtext(side=1, text="tuskless survival bias", line=2)
+mtext(side=2, text="log(likelihood)", line=2)
+#abline(h=(max(loglikelihoods) - 1.92), lty=2, col=alpha("black", 0.5))
+abline(v=MLE, col=alpha("black", 0.8), lty=3, lwd=3)
+abline(v=CI, col=alpha("red", 0.5), lty=3, lwd=3)
+```
+
+
+Multipanel figure for the manuscript
+
+```{r, echo=TRUE }
+dev.new(height=7, width=5, noRStudioGD=T)
+par(mfrow=c(2,1), mar=c(4,4,1,1))
+x <- rWNCHypergeo(nran=10000000,
+               m1=Npre_tuskless,
+               m2=Npre_tusked,
+               n=(Npost_tuskless+Npost_tusked),
+               odds=1) # diff odds ratios input here
+hist(x/(Npost_tuskless+Npost_tusked),
+     freq=F,
+     breaks=20,
+     main="",
+     xlab="",
+     ylab="",
+     xlim=c(0,0.6),
+     col=alpha("#2c7fb8", 0.8))
+mtext(side=2, text="Density", line=2.5)
+mtext(side=1, text="proportion of tuskless females", line=2)
+abline(v=quantile(x/(Npost_tuskless+Npost_tusked), probs=0.99), lty=3)
+abline(v=PropTuskless_post)
+abline(v=0.3614458)
+
+plot(y=(loglikelihoods), x=odds_range,
+     lwd=3,
+     type="l",
+     axes=F,
+     xlab="",
+     ylab="",
+     xlim=c(3,8),
+     ylim=c(-8,-2),
+     col=alpha("#2c7fb8", 0.8))
+axis(side=1, labels=T, at=c(1:10))
+axis(side=2, labels=T)
+mtext(side=1, text="tuskless survival odds", line=2)
+mtext(side=2, text="log(likelihood)", line=2.5)
+#abline(h=(max(loglikelihoods) - 1.92), lty=2, col=alpha("black", 0.5))
+abline(v=MLE, col=alpha("black", 0.8), lty=3, lwd=3)
+abline(v=CI, col=alpha("red", 0.5), lty=3, lwd=3)
+```

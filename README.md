@@ -2,6 +2,8 @@
 
 Scripts for various analyses are within the corresponding directories. Many of these scripts simply involve running previously published software but using python scripts to parallelize tasks across scaffolds, in order to dramatically speed up analyses. We used Princeton University's high-performance computing cluster "Della", which uses SLURM to manage job submissions.
 
+`survey_data_analyses` contains raw data and R markdown files used in analyzing the survey data. The subdirectory `population_survey_data_analysis` contains the analysis for Figure 1 in which we study the elephant population sizes before and after the war along with the frequency of tusklessness among females. The subdirectory `mother_offspring_data_analysis` contains the analysis of the mother offspring data in which we look at how often tuskless mothers give rise to tuskless and tusked daughters and also how often they give rise to sons and daughters overall. The R markdown files are heavily annotated, so please see these files for more information.
+
 `HWE` contains a python script for parsing a VCF file and assessing deviations in heterozygosity within tuskless samples.
 
 `LD` contains python scripts to run vcftools in a parallel fashion. These analyses quantify genotype linkage disequilibrium (LD) using vcftools (a separate job per scaffold to speed up analyses), and then an additional script parses this vcftools output to quantify how genotype LD decays with inter-SNP distance.

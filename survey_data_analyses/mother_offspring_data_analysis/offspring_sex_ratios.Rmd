@@ -1,0 +1,158 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages.
+```{r}
+library(tidyverse)
+```
+
+# Read in raw data
+
+Read in data from original excel file (Table S4) in which ONLY the header was modified. Previously, the header spanned three columns and contained information in a heirarchical format. We combined all this information into a single header column. Otherwise, no values within the rows containing raw data were ever touched within the excel sheet. All raw data formatting and recoding was done from the R commands in this file.
+```{r, include=FALSE}
+d <- read_delim(file="/Users/bjarnold/DivInformatics/AfricanElephants/DataFromShane/RecodingXcelSheet/calving_study.csv", delim=",")
+```
+
+# Clean up data table
+
+Excel introduced many rows at the end of the file consisting exclusively of NAs. Removing these.
+```{r}
+d <- d %>% dplyr::slice(1:268)
+```
+
+Currently, there is a column entitled "sex_confirmed_2020" that has check marks (or square root symbols). Let's replace these with "yes" using the mutate() and str_replace() functions:
+```{r}
+d <- d %>% mutate(sex_confirmed_2020 = str_replace(sex_confirmed_2020,
+                                                   pattern = "√",
+                                                   replacement = "yes"))
+```
+
+Filtering out columns not necessary for offspring sex ratio analysis, or the analysis of calf tusk status: 
+```{r}
+offspring_data <- d %>% select(-mom_name,
+                     -family,
+                     -notes,
+                     -first_date_calf_recorded,
+                     -calf_age_months,
+                     -calf_age_weeks,
+                     -calf_age_days,
+                     -estim_year_birth)
+```
+
+Let's combine the 4 columns that indicate the mom's tusk status into a single column that contains this information as a categorical variable.
+```{r}
+offspring_data <- offspring_data %>%
+  mutate(mom_tusk_status = case_when(mom_2_tusks == 1 ~ "tusked",
+                                      mom_0_tusks == 1 ~ "tuskless",
+                                      mom_left_tusk == 1 ~ "single_tusker",
+                                      mom_right_tusk == 1 ~ "single_tusker",
+                                      TRUE ~ "NA")) %>%
+  select(-mom_2_tusks, -mom_0_tusks, -mom_left_tusk, -mom_right_tusk)
+```
+
+Likewise, let's combine the 4 columns that indicate the tusk status of each calf into a single column:
+```{r}
+offspring_data <- offspring_data %>%
+  mutate(calf_tusk_status = case_when(calf_2_tusks == 1 ~ "tusked",
+                                      calf_0_tusks == 1 ~ "tuskless",
+                                      calf_left_tusk == 1 ~ "single_tusker",
+                                      calf_right_tusk == 1 ~ "single_tusker",
+                                      TRUE ~ "NA")) %>%
+  select(-calf_2_tusks, -calf_0_tusks, -calf_left_tusk, -calf_right_tusk)
+```
+
+There are three columns specify the sex of the calf and are redundant. Let's ensure they are in fact redundant then remove the columns that encode sex with 1's and NA's:
+```{r}
+offspring_data %>% filter(calf_female == 1) %>%
+  distinct(calf_sex)
+offspring_data %>% filter(calf_male == 1) %>%
+  distinct(calf_sex)
+```
+
+According to the output of the distinct() functions above, it appears there are two distinct ways that each of males and females are labeled in the 'calf_sex' (e.g. two different kinds of "m"). There could be extra hidden characters involved, but let's fix this by creating a new calf_sex column such that sex is represented by a single character type: "m", "f", or "unk".
+```{r}
+offspring_data <- offspring_data %>%
+  mutate(calf_sex_recoded = case_when(calf_female == 1 ~ "f",
+                                        calf_male == 1 ~ "m",
+                                        TRUE ~ "unk")) %>%
+  select(-calf_female, -calf_male, -calf_sex)
+offspring_data %>% distinct(calf_sex_recoded)
+```
+
+Lastly, let's filter out uncertain data where the sex of an offpspring/calf could not be determined ("unk"):
+```{r}
+offspring_data <- offspring_data %>% 
+  filter(calf_sex_recoded != "unk")
+```
+
+# Analyze cleaned data
+
+These data are now cleaned and ready for analysis. 
+
+Let's start with an analysis of offspring sex ratios where we use the following filtering criteria:
+
+(1) 'mom_accuracy' is greater than 2, since values of 4 correspond to "Known" and 3 correspond to "highly likely"
+
+(2) ignore single-tuskers  
+
+(3) only consider calves less than or equal to 12 years of age, since older male calves may leave their mother.
+
+All of these filtering criteria may be changed, and these filtered data are stored in a new variable called "sex_ratios".
+```{r}
+sex_ratios <- offspring_data %>% filter(mom_accuracy > 2) %>%
+  filter(calf_age_years <= 5) %>%
+  group_by(mom_tusk_status) %>%
+  summarize(female_offspring = sum(calf_sex_recoded == "f"), 
+            male_offspring = sum(calf_sex_recoded == "m"),
+            total = length(calf_sex_recoded),
+            proportion_female = sum(calf_sex_recoded == "f")/length(calf_sex_recoded))
+sex_ratios
+```
+
+
+Let's use these sex ratios of tuskless and tusked moms to see whether they fit the null model of 50:50 females to males and also check whether groups are significantly different from one another:
+```{r}
+tusked_ratios <- sex_ratios %>% filter(mom_tusk_status == "tusked")
+tuskless_ratios <- sex_ratios %>% filter(mom_tusk_status == "tuskless")
+single_tusker_ratios <- sex_ratios %>% filter(mom_tusk_status == "single_tusker")
+
+# test whether sex ratios of tuskless moms fit 50:50 sex ratio null
+binom.test(x=tuskless_ratios$female_offspring,
+           n=tuskless_ratios$total,
+           p=0.5)
+
+# test whether sex ratios of tusked moms fit 50:50 sex ratio null
+binom.test(x=tusked_ratios$female_offspring,
+           n=tusked_ratios$total,
+           p=0.5)
+
+# test whether sex ratios of singlt tusker moms fit 50:50 sex ratio null
+binom.test(x=single_tusker_ratios$female_offspring,
+           n=single_tusker_ratios$total,
+           p=0.5)
+
+# test whether tuskless moms and tusked moms have significantly different sex ratios
+prop.test(x=c(tuskless_ratios$female_offspring, tusked_ratios$female_offspring),
+          n=c(tuskless_ratios$total, tusked_ratios$total), alternative="greater")
+```
+
+
+Let's also do an analysis where we analyze the tusk status of both mothers and calves
+
+```{r}
+tusk_status <- offspring_data %>% filter(mom_accuracy > 2) %>%
+  filter(!is.na(calf_tusk_status)) %>% #filter out missing data
+  filter(calf_age_years <=12, !is.na(calf_tusk_status)) %>% # filter by calf age
+  filter(calf_sex_recoded == "f") %>% # only look at females
+  group_by(mom_tusk_status) %>%
+  summarize(calves_2_tusks = sum(calf_tusk_status == "tusked"), 
+            calves_0_tusks = sum(calf_tusk_status == "tuskless"),
+            calves_1_tusks = sum(calf_tusk_status == "single_tusker"))
+tusk_status
+```
